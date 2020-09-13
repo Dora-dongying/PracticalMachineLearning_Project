@@ -1,0 +1,83 @@
+---
+title: "Predicting Motions"
+author: "Dongying"
+date: "9/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.   
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+## Getting and cleaning the data
+We first download the data from provided URL and load them into R.
+```{r loading data, cache=TRUE}
+## Download the CSV file and then unzip it. Check if the files exist before processing.
+trainingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+if (!file.exists("training.csv")){
+        download.file(trainingURL, "training.csv", method = "curl")
+}
+testingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if (!file.exists("testing.csv")){
+        download.file(testingURL, "testing.csv", method = "curl")
+}
+
+## Read data into R
+training <- read.csv("training.csv", na.strings=c("NA","#DIV/0!", ""))
+testing <- read.csv("testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+We can take a look at the data and cleaning them by exclude the NA columns and irrelevant columns such as usernames and so on.
+```{r cleaning data, cache=TRUE}
+library(caret)
+training <- training[,colSums(is.na(training)) == 0]
+testing <- testing[,colSums(is.na(testing)) == 0]
+training   <-training[,-c(1:7)]
+testing <-testing[,-c(1:7)]
+training$classe <- as.factor(training$classe)
+```
+
+## Prediction by using random forest
+Create partition using the training data so we can have 30% data for validation:
+```{r partition for validation, cache = TRUE}
+set.seed(123)
+inValid <- createDataPartition(training$classe, p = 0.3, list = FALSE)
+validation <- training[inValid,]
+training_train <- training[-inValid,]
+dim(validation)
+dim(training_train)
+```
+Train the actual training data using "classe" as outcome using random forest method. Use the fitted model to predict for the validation group and than compare the results.
+```{r modFit_rf, cache = TRUE}
+library(randomForest)
+modFit_rf <- randomForest(classe ~., data = training_train, method = "class")
+pred_rf <- predict(modFit_rf, newdata = validation)
+confusionMatrix(pred_rf, validation$classe)
+```
+The accuracy is as high as 0.9954. We can use this model to predict the testing data.
+
+## Predicting Motions in Testing data
+Here we predict the motions in the testing group.
+```{r prediction, cache = TRUE}
+pred_testing <- predict(modFit_rf, newdata = testing)
+pred_testing
+```
+
+# Apendix: Training data with "rpart" (less accurate)
+Here is and example of other model fitting with "rpart" method, which gives us lower accuracy by comparing the prediction results with validation group. We choose random forest from all the methods.
+```{r rpart, cache = TRUE}
+library(rpart)
+library(rattle)
+modFit_rpart <- rpart(classe ~., data = training_train, method = "class")
+fancyRpartPlot(modFit_rpart)
+pred_rpart <- predict(modFit_rpart, newdata = validation, type = "class")
+confusionMatrix(pred_rpart, validation$classe)
+```
+
+
+
+
